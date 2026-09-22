@@ -1,0 +1,1003 @@
+# CatPawOpen 爬虫编写手册
+
+> 面向新手的详细爬虫开发指南
+
+---
+
+## 目录
+
+1. [项目概述](#1-项目概述)
+2. [前置知识准备](#2-前置知识准备)
+3. [项目结构详解](#3-项目结构详解)
+4. [Spider 接口规范](#4-spider-接口规范)
+5. [工具函数介绍](#5-工具函数介绍)
+6. [实战案例详解](#6-实战案例详解)
+7. [从零开发一个爬虫](#7-从零开发一个爬虫)
+8. [常见问题与技巧](#8-常见问题与技巧)
+9. [部署与调试](#9-部署与调试)
+
+---
+
+## 1. 项目概述
+
+### 1.1 什么是 CatPawOpen？
+
+CatPawOpen 是一个基于 Node.js 的视频源爬虫 API 服务器，主要服务于 CatVod（TV视频聚合应用）。它负责从各种视频网站抓取数据，并通过统一的 API 接口返回给客户端应用。
+
+### 1.2 技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| Node.js | - | 运行环境（使用 ES Module） |
+| Fastify | 4.26.0 | Web 框架，处理 HTTP 请求 |
+| Axios | 1.6.7 | HTTP 客户端，发送网络请求 |
+| Cheerio | 1.0.0-rc.12 | HTML 解析，类似 jQuery 的语法 |
+| Crypto-JS | 4.2.0 | 加密解密工具 |
+
+### 1.3 爬虫工作流程
+
+```
+客户端请求 -> Fastify服务器 -> Spider模块 -> 目标网站
+                                              |
+                                              v
+返回数据 <- 格式化响应 <- 解析数据 <- HTML/JSON响应
+```
+
+---
+
+## 2. 前置知识准备
+
+### 2.1 必备知识
+
+在开始编写爬虫之前，你需要了解：
+
+- **JavaScript 基础**：变量、函数、异步（async/await）、数组操作
+- **ES6+ 语法**：箭头函数、解构赋值、模板字符串
+- **HTTP 基础**：GET/POST 请求、请求头、Cookie
+- **DOM 操作**：了解 HTML 结构、CSS 选择器
+- **异步编程**：Promise、async/await
+
+### 2.2 开发环境准备
+
+```bash
+# 进入项目目录
+cd nodejs
+
+# 安装依赖
+npm install
+
+# 启动开发服务器（端口 3006）
+npm run dev
+```
+
+### 2.3 推荐工具
+
+- **VS Code**：代码编辑器
+- **Chrome DevTools**：查看网页结构和网络请求
+- **Postman**：API 测试工具
+
+---
+
+## 3. 项目结构详解
+
+### 3.1 目录结构
+
+```
+CatPawOpen/
+├── nodejs/
+│   ├── src/
+│   │   ├── spider/
+│   │   │   └── video/           # 视频爬虫存放目录
+│   │   │       ├── kanav.js     # 爬虫示例
+│   │   │       ├── missav.js
+│   │   │       └── ...
+│   │   ├── util/                # 工具函数库
+│   │   │   ├── req.js           # HTTP 请求工具（自动管理 Cookie）
+│   │   │   ├── cookieStore.js   # Cookie 存储管理
+│   │   │   └── utils.js         # 通用工具
+│   │   ├── index.js             # 服务器入口
+│   │   └── router.js            # 路由注册
+│   ├── package.json
+│   └── esbuild.js               # 构建配置
+```
+
+### 3.2 关键文件说明
+
+#### router.js - 路由注册
+
+这是每个新爬虫必须注册的地方：
+
+```javascript
+// 1. 导入你的爬虫模块
+import kanav from './spider/video/kanav.js';
+
+// 2. 在 spiders 数组中添加
+const spiders = [
+    kanav,
+    // yourSpider,  // 在这里添加你的爬虫
+];
+```
+
+#### esbuild.js - 构建配置
+
+打包配置，将多个模块打包成单个文件。
+
+---
+
+## 4. Spider 接口规范
+
+每个爬虫模块必须实现以下 6 个接口：
+
+### 4.1 接口总览
+
+| 接口 | 方法 | 调用时机 | 参数 |
+|------|------|----------|------|
+| `/init` | POST | 首次加载、搜索时 | 无 |
+| `/home` | POST | 获取分类列表 | 无 |
+| `/category` | POST | 获取分类下的视频 | id, page, filters |
+| `/detail` | POST | 获取视频详情 | id |
+| `/play` | POST | 获取播放地址 | flag, id |
+| `/search` | POST | 搜索视频 | wd, page |
+
+### 4.2 接口详细说明
+
+#### `/init` - 初始化接口
+
+```javascript
+async function init(_inReq, _outResp) {
+    // 可以在这里做一些初始化工作
+    // 比如获取 Cookie、检查登录状态等
+    return {};  // 通常返回空对象
+}
+```
+
+#### `/home` - 分类列表接口
+
+返回视频网站的分类信息和筛选器：
+
+```javascript
+async function home(_inReq, _outResp) {
+    return {
+        class: [
+            {
+                type_id: '1',           // 分类 ID
+                type_name: '中文字幕',   // 分类名称
+                type_flag: '1',         // 可选，"1"表示目录模式
+            },
+            {
+                type_id: '2',
+                type_name: '日韩',
+            },
+        ],
+        filters: {
+            // 分类对应的筛选器
+            '1': [
+                {
+                    key: 'sort',        // 筛选键
+                    name: '排序',        // 显示名称
+                    init: 'time_add',    // 默认值
+                    value: [
+                        { n: '最新发布', v: 'time_add' },
+                        { n: '最多观看', v: 'hits' },
+                    ]
+                }
+            ]
+        }
+    };
+}
+```
+
+#### `/category` - 分类视频列表接口
+
+```javascript
+async function category(inReq, _outResp) {
+    // 获取请求参数
+    const tid = inReq.body.id;           // 分类 ID
+    const pg = inReq.body.page;          // 页码
+    const extend = inReq.body.filters;   // 筛选条件
+
+    // 处理页码（重要：页码从 1 开始，0 也要当作 1 处理）
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    // 构建请求 URL
+    const reqUrl = `https://example.com/category/${tid}/page/${page}`;
+
+    // 发送请求并解析
+    const html = await request(reqUrl);
+    const $ = load(html);
+
+    // 解析视频列表
+    let videos = [];
+    $('.video-item').each((_, element) => {
+        const url = $(element).find('a').attr('href');
+        const title = $(element).find('.title').text().trim();
+        const pic = $(element).find('img').attr('src');
+        const remark = $(element).find('.remark').text().trim();
+
+        videos.push({
+            vod_id: url,          // 视频唯一标识
+            vod_name: title,      // 视频名称
+            vod_pic: pic,         // 封面图片
+            vod_remarks: remark,  // 备注信息（如集数、时长）
+        });
+    });
+
+    return {
+        page: page,              // 当前页码
+        pagecount: page + 1,     // 总页数（当返回数据少于每页数量时表示最后一页）
+        list: videos,            // 视频列表
+        filter: [/* 可选：筛选器配置 */],
+    };
+}
+```
+
+#### `/detail` - 视频详情接口
+
+```javascript
+async function detail(inReq, _outResp) {
+    const id = inReq.body.id;  // 视频 ID（来自 vod_id）
+
+    const html = await request(SITE + id);
+    const $ = load(html);
+
+    // 解析详情页数据
+    const title = $('.title').text().trim();
+    const pic = $('.cover img').attr('src');
+    const actor = $('.actor').text().trim();
+    const description = $('.description').text().trim();
+
+    // 解析播放列表
+    // 可以有多条线路，用 $$$ 分隔
+    // 每条线路的选集用 # 分隔，每集用 $ 分隔名称和 ID
+    let vod = {
+        vod_id: id,
+        vod_name: title,
+        vod_pic: pic,
+        vod_actor: actor,
+        vod_content: description,
+        vod_play_from: '线路1$$$线路2',  // 播放来源
+        vod_play_url: '第1集$id1#第2集$id2$$$第1集$id3#第2集$id4',
+    };
+
+    return {
+        list: [vod],
+    };
+}
+```
+
+#### `/play` - 播放地址接口
+
+```javascript
+async function play(inReq, _outResp) {
+    const flag = inReq.body.flag;  // 线路名称
+    const id = inReq.body.id;      // 选集 ID（来自 detail 的 vod_play_url）
+
+    return {
+        parse: 0,  // 0 表示直接播放，1 表示需要解析
+        url: id,   // 播放地址
+        header: {  // 可选：请求头
+            'User-Agent': UA,
+            'Referer': SITE,
+        },
+    };
+}
+```
+
+#### `/search` - 搜索接口
+
+```javascript
+async function search(inReq, _outResp) {
+    const wd = inReq.body.wd;    // 搜索关键词
+    const pg = inReq.body.page;  // 页码
+
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    // URL 编码搜索关键词
+    const keyword = encodeURIComponent(wd);
+    const html = await request(`${SITE}/search?q=${keyword}&page=${page}`);
+    const $ = load(html);
+
+    let videos = [];
+    // 解析逻辑与 category 类似
+    // ...
+
+    return {
+        page: page,
+        pagecount: page + 1,
+        list: videos,
+    };
+}
+```
+
+### 4.3 Spider 导出格式
+
+每个爬虫文件必须导出 `meta` 和 `api` 两个属性：
+
+```javascript
+export default {
+    meta: {
+        key: 'spider_key',    // 唯一标识，只能用小写字母和数字
+        name: '显示名称',      // 在客户端显示的名称
+        type: 3,              // 3=视频，10+=阅读，20+=漫画，30+=音乐，40+=网盘
+    },
+    api: async (fastify) => {
+        // 注册所有接口
+        fastify.post('/init', init);
+        fastify.post('/home', home);
+        fastify.post('/category', category);
+        fastify.post('/detail', detail);
+        fastify.post('/play', play);
+        fastify.post('/search', search);
+    },
+};
+```
+
+---
+
+## 5. 工具函数介绍
+
+### 5.1 req.js - HTTP 请求工具
+
+**推荐使用此工具而非原生 axios**，因为它具有自动 Cookie 管理功能。
+
+```javascript
+import req from '../../util/req.js';
+
+// 基本用法
+const response = await req.get(url, {
+    headers: {
+        'User-Agent': 'Mozilla/5.0...',
+        'Referer': 'https://example.com',
+    }
+});
+
+// POST 请求
+const response = await req.post(url, {
+    data: formData,
+    headers: { /* ... */ }
+});
+
+// Cookie 相关方法
+req.saveCookies();         // 立即保存 Cookie
+req.loadCookies();         // 加载 Cookie
+req.clearCookies('domain.com');   // 清除指定域的 Cookie
+req.clearAllCookies();     // 清除所有 Cookie
+```
+
+### 5.2 Cheerio - HTML 解析
+
+```javascript
+import { load } from 'cheerio';
+
+const $ = load(html);
+
+// 基本选择器
+$('.class')           // 类选择器
+$('#id')              // ID 选择器
+$('div > a')          // 后代选择器
+$('a[href]')          // 属性选择器
+
+// 获取属性
+$('img').attr('src')
+$('a').data('id')
+
+// 获取文本
+$('.title').text().trim()  // trim() 去除首尾空格
+
+// 遍历元素
+$('.item').each((index, element) => {
+    const text = $(element).find('.name').text();
+    // 处理每个元素
+});
+
+// 高级选择器
+$('script:contains(player_aaaa)')  // 包含特定文本的元素
+$('.video-item').eq(0)             // 获取第一个匹配元素
+```
+
+### 5.3 Crypto-JS - 加密解密
+
+```javascript
+import CryptoJS from 'crypto-js';
+
+// Base64 解码
+const encoded = 'SGVsbG8gV29ybGQ=';
+const decoded = CryptoJS.enc.Base64.parse(encoded).toString(CryptoJS.enc.Utf8);
+
+// URL 解码
+const url = decodeURIComponent(encoded);
+
+// 其他加密方式（如需）
+const hash = CryptoJS.MD5('message');
+const encrypted = CryptoJS.AES.encrypt('message', 'key');
+```
+
+---
+
+## 6. 实战案例详解
+
+### 6.1 KanAV 爬虫完整代码分析
+
+```javascript
+import req from '../../util/req.js';
+import { load } from 'cheerio';
+import CryptoJS from 'crypto-js';
+
+// ============ 常量定义 ============
+const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_2_1 like Mac OS X)...';
+const SITE = 'https://kanav.ad';
+
+// ============ 封装请求函数 ============
+async function request(reqUrl) {
+    const resp = await req.get(reqUrl, {
+        headers: {
+            'User-Agent': UA,
+        },
+    });
+    return resp.data;
+}
+
+// ============ home 接口 ============
+async function home(_inReq, _outResp) {
+    // 硬编码分类列表
+    let classes = [
+        { type_id: '1', type_name: '中文字幕' },
+        { type_id: '2', type_name: '日韩' },
+        { type_id: '3', type_name: '欧美' },
+        { type_id: '4', type_name: '国产' },
+        { type_id: '30', type_name: '自拍' },
+        { type_id: '31', type_name: '探花' },
+        { type_id: '32', type_name: '主播' },
+        { type_id: '20', type_name: '动漫' },
+    ];
+    return { class: classes };
+}
+
+// ============ category 接口 ============
+async function category(inReq, _outResp) {
+    // 获取参数
+    const tid = inReq.body.id;
+    const pg = inReq.body.page;
+    const extend = inReq.body.filters || { sort: 'time_add' };
+
+    // 页码处理（关键）
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    // 构建 URL
+    let reqUrl = `${SITE}/index.php/vod/show/by/${extend.sort}/id/${tid}/page/${page}.html`;
+
+    // 请求并解析
+    const html = await request(reqUrl);
+    const $ = load(html);
+
+    // 解析视频列表
+    let videos = [];
+    $('.post-list .col-md-3').each((_, element) => {
+        const videoItem = $(element).find('.video-item');
+        const entryTitle = $(element).find('.entry-title');
+
+        const vodUrl = entryTitle.find('a').attr('href');
+        const vodPic = videoItem.find('.featured-content-image a img').attr('data-original');
+        const vodName = entryTitle.find('a').text().trim();
+        const remark = videoItem.find('span.model-view-left').text().trim();
+
+        videos.push({
+            vod_id: vodUrl,
+            vod_name: vodName,
+            vod_pic: vodPic,
+            vod_remarks: remark,
+        });
+    });
+
+    return {
+        page: page,
+        pagecount: videos.length < 10 ? page : page + 1,  // 判断是否最后一页
+        list: videos,
+        filter: [{  // 返回筛选器配置
+            key: "sort",
+            name: "排序",
+            init: "time_add",
+            value: [
+                { "n": "最新发布", "v": "time_add" },
+                { "n": "最多观看", "v": "hits" },
+                { "n": "本周热榜", "v": "hits_week" },
+            ],
+        }],
+    };
+}
+
+// ============ detail 接口 ============
+async function detail(inReq, _outResp) {
+    const id = inReq.body.id;
+    const html = await request(SITE + id);
+    const $ = load(html);
+
+    // 从 JavaScript 变量中提取播放地址
+    const player = $('script:contains(player_aaaa)').text().replace('var player_aaaa=', '');
+    const encodedUrl = JSON.parse(player).url;
+
+    // 解码：Base64 -> URL解码
+    const base64Decoded = CryptoJS.enc.Base64.parse(encodedUrl).toString(CryptoJS.enc.Utf8);
+    const decodedUrl = decodeURIComponent(base64Decoded);
+
+    // 解析演员信息
+    const name = $('.hr-style.hr-actor').siblings('a').text();
+    const c = { id: 's-' + name, name: name };
+    const actor = [`[a = cr: ${JSON.stringify(c)} /]${name}[/a]`];
+
+    let vod = {
+        vod_id: id,
+        vod_name: $('.page-title').text().trim(),
+        vod_pic: $('.video-cover img').attr('data-original'),
+        vod_actor: actor,
+        vod_play_from: 'KanAV',
+        vod_play_url: '播放$' + decodedUrl,
+    };
+
+    return { list: [vod] };
+}
+
+// ============ play 接口 ============
+async function play(inReq, _outResp) {
+    const flag = inReq.body.flag;
+    const id = inReq.body.id;
+    return {
+        parse: 0,
+        url: id,
+        header: {
+            'User-Agent': UA,
+            'Referer': 'https://kanav.ad/',
+        },
+    };
+}
+
+// ============ search 接口 ============
+async function search(inReq, _outResp) {
+    const pg = inReq.body.page;
+    const wd = inReq.body.wd;
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    const text = encodeURIComponent(wd);  // URL 编码
+    const html = await request(`${SITE}/index.php/vod/search/by/time_add/page/${page}/wd/${text}.html`);
+    const $ = load(html);
+
+    let videos = [];
+    $('.post-list .col-md-3').each((_, element) => {
+        // 与 category 相同的解析逻辑
+        // ...
+    });
+
+    return {
+        page: page,
+        pagecount: videos.length < 10 ? page : page + 1,
+        list: videos,
+    };
+}
+
+// ============ 导出 ============
+export default {
+    meta: {
+        key: 'kanav',
+        name: 'KanAV',
+        type: 3,
+    },
+    api: async (fastify) => {
+        fastify.post('/init', async () => ({}));
+        fastify.post('/home', home);
+        fastify.post('/category', category);
+        fastify.post('/detail', detail);
+        fastify.post('/play', play);
+        fastify.post('/search', search);
+    },
+};
+```
+
+### 6.2 关键技术点分析
+
+#### 1. 从 JavaScript 变量提取数据
+
+```javascript
+// 网页中有这样的代码：var player_aaaa={"url":"base64编码的地址"};
+const player = $('script:contains(player_aaaa)').text().replace('var player_aaaa=', '');
+const encodedUrl = JSON.parse(player).url;
+```
+
+#### 2. 多层解码
+
+```javascript
+// 先 Base64 解码，再 URL 解码
+const base64Decoded = CryptoJS.enc.Base64.parse(encodedUrl).toString(CryptoJS.enc.Utf8);
+const decodedUrl = decodeURIComponent(base64Decoded);
+```
+
+#### 3. 判断最后一页
+
+```javascript
+// 如果返回的视频数少于每页应有的数量（10个），说明是最后一页
+pagecount: videos.length < 10 ? page : page + 1
+```
+
+---
+
+## 7. 从零开发一个爬虫
+
+### 7.1 开发流程
+
+```
+1. 分析目标网站
+   ↓
+2. 确定分类和筛选器
+   ↓
+3. 编写 home 接口
+   ↓
+4. 编写 category 接口
+   ↓
+5. 编写 detail 接口
+   ↓
+6. 编写 play 接口
+   ↓
+7. 编写 search 接口（可选）
+   ↓
+8. 注册并测试
+```
+
+### 7.2 网站分析技巧
+
+#### 使用 Chrome DevTools
+
+1. **查看网络请求**
+   - 打开网站按 F12
+   - 切换到 Network 标签
+   - 刷新页面，观察请求
+
+2. **分析数据来源**
+   - 数据在 HTML 中？→ 用 Cheerio 解析
+   - 数据在 JSON 中？→ 直接解析 JSON
+   - 数据在 JS 变量中？→ 提取变量内容
+
+3. **寻找 API 接口**
+   - 查找 XHR/Fetch 请求
+   - 尝试直接调用 API
+
+#### 分析示例
+
+假设我们要爬取 `example.com`：
+
+```
+1. 打开 https://example.com
+2. 观察分类结构：
+   - /category/1 - 电影
+   - /category/2 - 电视剧
+3. 查看列表页 HTML：
+   - 发现每个视频在 .video-card 中
+   - 标题在 .title 中
+   - 图片在 img.poster 中
+4. 点击进入详情页：
+   - URL 格式：/detail/12345
+   - 播放按钮链接到 /play/12345
+```
+
+### 7.3 编写模板
+
+```javascript
+import req from '../../util/req.js';
+import { load } from 'cheerio';
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...';
+const SITE = 'https://example.com';
+
+async function request(reqUrl) {
+    const resp = await req.get(reqUrl, {
+        headers: { 'User-Agent': UA },
+    });
+    return resp.data;
+}
+
+async function home(_inReq, _outResp) {
+    // 根据实际网站分类修改
+    return {
+        class: [
+            { type_id: '1', type_name: '电影' },
+            { type_id: '2', type_name: '电视剧' },
+        ],
+    };
+}
+
+async function category(inReq, _outResp) {
+    const tid = inReq.body.id;
+    const pg = inReq.body.page;
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    // 根据实际网站 URL 格式修改
+    const reqUrl = `${SITE}/category/${tid}/page/${page}`;
+    const html = await request(reqUrl);
+    const $ = load(html);
+
+    let videos = [];
+    // 根据实际 HTML 结构修改选择器
+    $('.video-card').each((_, element) => {
+        const url = $(element).find('a').attr('href');
+        const title = $(element).find('.title').text().trim();
+        const pic = $(element).find('img').attr('src');
+        const remark = $(element).find('.info').text().trim();
+
+        videos.push({
+            vod_id: url,
+            vod_name: title,
+            vod_pic: pic,
+            vod_remarks: remark,
+        });
+    });
+
+    return {
+        page: page,
+        pagecount: videos.length < 20 ? page : page + 1,
+        list: videos,
+    };
+}
+
+async function detail(inReq, _outResp) {
+    const id = inReq.body.id;
+    const html = await request(SITE + id);
+    const $ = load(html);
+
+    // 根据实际情况修改
+    const title = $('.video-title').text().trim();
+    const pic = $('.poster img').attr('src');
+    const desc = $('.description').text().trim();
+
+    // 解析播放列表
+    let playUrls = [];
+    $('.episode-item').each((_, element) => {
+        const name = $(element).text().trim();
+        const url = $(element).attr('href');
+        playUrls.push(`${name}$${url}`);
+    });
+
+    let vod = {
+        vod_id: id,
+        vod_name: title,
+        vod_pic: pic,
+        vod_content: desc,
+        vod_play_from: '默认线路',
+        vod_play_url: playUrls.join('#'),
+    };
+
+    return { list: [vod] };
+}
+
+async function play(inReq, _outResp) {
+    const flag = inReq.body.flag;
+    const id = inReq.body.id;
+
+    // 这里可能需要二次请求获取真实播放地址
+    return {
+        parse: 0,
+        url: id,
+        header: {
+            'User-Agent': UA,
+            'Referer': SITE,
+        },
+    };
+}
+
+async function search(inReq, _outResp) {
+    const wd = inReq.body.wd;
+    const pg = inReq.body.page;
+    let page = pg || 1;
+    if (page == 0) page = 1;
+
+    const keyword = encodeURIComponent(wd);
+    const html = await request(`${SITE}/search?q=${keyword}&page=${page}`);
+    const $ = load(html);
+
+    let videos = [];
+    // 与 category 类似的解析逻辑
+    // ...
+
+    return {
+        page: page,
+        pagecount: page + 1,
+        list: videos,
+    };
+}
+
+export default {
+    meta: {
+        key: 'example',  // 小写唯一标识
+        name: '示例站',
+        type: 3,
+    },
+    api: async (fastify) => {
+        fastify.post('/init', async () => ({}));
+        fastify.post('/home', home);
+        fastify.post('/category', category);
+        fastify.post('/detail', detail);
+        fastify.post('/play', play);
+        fastify.post('/search', search);
+    },
+};
+```
+
+### 7.4 注册你的爬虫
+
+在 `nodejs/src/router.js` 中：
+
+```javascript
+// 1. 导入
+import yourSpider from './spider/video/your-spider.js';
+
+// 2. 添加到数组
+const spiders = [
+    kanav,
+    missav,
+    yourSpider,  // 添加在这里
+];
+```
+
+---
+
+## 8. 常见问题与技巧
+
+### 8.1 Cookie 管理
+
+使用 `req.js` 可以自动管理 Cookie：
+
+```javascript
+import req from '../../util/req.js';
+
+// 自动保存和发送 Cookie
+await req.get(url);
+
+// 手动操作
+req.saveCookies();           // 立即保存
+req.clearCookies('example.com');  // 清除指定域 Cookie
+req.loadCookies();           // 重新加载
+```
+
+### 8.2 反爬虫应对
+
+```javascript
+// 1. 设置请求头
+const headers = {
+    'User-Agent': 'Mozilla/5.0 ...',
+    'Referer': SITE,
+    'Accept': 'text/html,application/xhtml+xml',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+};
+
+// 2. 添加延迟
+await new Promise(resolve => setTimeout(resolve, 1000));
+
+// 3. 使用代理（需要自行实现）
+```
+
+### 8.3 数据提取技巧
+
+```javascript
+// 1. 从 JSON 中提取
+const jsonText = $('script').text();
+const data = JSON.parse(jsonText.match(/var data = ({.*?})/)[1]);
+
+// 2. 处理懒加载图片
+const pic = $('img').attr('data-original') || $('img').attr('src');
+
+// 3. 清理文本
+const text = $('.content').text().trim().replace(/\s+/g, ' ');
+```
+
+### 8.4 URL 处理
+
+```javascript
+// 相对 URL 转绝对 URL
+const url = new URL(relativePath, baseUrl).href;
+
+// URL 参数
+const params = new URLSearchParams(url);
+const id = params.get('id');
+
+// URL 编码
+const encoded = encodeURIComponent('中文关键词');
+```
+
+### 8.5 调试技巧
+
+```javascript
+// 打印 HTML 结构
+console.log(html);
+
+// 打印选择器结果
+console.log($('.item').length);
+
+// 保存 HTML 到文件用于分析
+import fs from 'fs';
+fs.writeFileSync('debug.html', html);
+```
+
+### 8.6 常见错误
+
+| 错误 | 原因 | 解决方案 |
+|------|------|----------|
+| 选择器找不到元素 | 选择器错误或页面结构变化 | 使用浏览器检查实际 DOM |
+| 请求 403/404 | 需要登录或 URL 错误 | 检查 Cookie 和 Referer |
+| 页码问题 | 页码从 0 开始 | `if (page == 0) page = 1` |
+| JSON 解析失败 | JSON 格式问题 | 检查引号和转义 |
+
+---
+
+## 9. 部署与调试
+
+### 9.1 开发调试
+
+```bash
+# 启动开发服务器（支持热重载）
+cd nodejs
+npm run dev
+```
+
+开发服务器运行在 `http://localhost:3006`
+
+### 9.2 测试接口
+
+使用 Postman 或 curl 测试：
+
+```bash
+# 测试 home 接口
+curl -X POST http://localhost:3006/spider/kanav/3/home
+
+# 测试 category 接口
+curl -X POST http://localhost:3006/spider/kanav/3/category \
+  -H "Content-Type: application/json" \
+  -d '{"id":"1","page":1}'
+
+# 测试 detail 接口
+curl -X POST http://localhost:3006/spider/kanav/3/detail \
+  -H "Content-Type: application/json" \
+  -d '{"id":"/index.php/vod/detail/id/123.html"}'
+```
+
+### 9.3 生产构建
+
+```bash
+# 构建
+npm run build
+
+
+
+### 9.4 添加混淆标记
+
+如果需要保护代码，在文件开头添加：
+
+```javascript
+//jiami-mark
+// 这个文件会被混淆处理
+```
+
+---
+
+## 附录：完整示例参考
+
+查看更多爬虫实现示例：
+
+- `nodejs/src/spider/video/kanav.js` - 基础爬虫示例
+- `nodejs/src/spider/video/missav.js` - 复杂解析示例
+- `nodejs/src/spider/video/pornhub.js` - 大型网站爬虫
+
+---
+
+## 总结
+
+编写爬虫的核心步骤：
+
+1. **理解接口规范** - 6 个接口的作用和返回格式
+2. **分析目标网站** - 找到分类、列表、详情的数据来源
+3. **使用工具函数** - req.js、Cheerio、Crypto-JS
+4. **处理边界情况** - 页码、空列表、错误处理
+5. **调试和测试** - 打印日志、使用 Postman
+
+希望这份手册能帮助你快速上手 CatPawOpen 爬虫开发！
