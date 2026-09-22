@@ -1,0 +1,109 @@
+{
+    "urls": [
+           
+        {
+            "url": "",
+            "name": "TV"
+        },
+        {
+            "url": "https://github-proxy.lixxing.top/https://raw.githubusercontent.com/xyg2233/PizazzXS/refs/heads/master/单线路文件/TVBoxOSC/tvbox/api.json",
+            "name": "Vip"
+        },
+        {
+            "url": "https://bitbucket.org/xyg233/newapi/raw/main/fongmi.json",
+            "name": "F-M"
+        },
+        {
+            "url": "https://9877.kstore.space/sun.json",
+            "name": "潇洒"
+        },
+        {
+            "url": "http://mytv6688.xyz/aowu/config.webp",
+            "name": "嗷呜"
+        },
+        {
+            "url": "https://down.nigx.cn/raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json",
+            "name": "南风"
+        },
+        {
+            "url": "http://肥猫.net",
+            "name": "肥猫"
+        },
+        {
+            "url": "http://52xinghe.top/%E6%98%9F%E6%B2%B3/",
+            "name": "星河"
+        },
+        {
+            "url": "https://gh-proxy.org/https://raw.githubusercontent.com/ggrrttyyiii/CatVodSpider/refs/heads/main/json/demo.json",
+            "name": "小米"
+        },
+        {
+            "url": "http://www.饭太硬.art/tv",
+            "name": "饭太硬"
+        },
+        {
+            "url": "https://9280.kstore.space/wex.json",
+            "name": "放牛娃"
+        },
+        {
+            "url": "http://hb.小虎斑.site:25252/仅供测试",
+            "name": "小虎斑"
+        },
+        {
+            "url":"http://www.小不点.com",
+            "name": "摸鱼儿"
+        },
+        {
+            "url": "https://down.nigx.cn/raw.githubusercontent.com/xyq254245/xyqonlinerule/main/XYQTVBox.json",
+            "name": "香雅情"
+        },
+        {
+            "url": "https://down.nigx.cn/raw.githubusercontent.com/maoystv/6/main/001.json",
+            "name": "分享者"
+        },
+        {
+            "url": "https://tvbox.catvod.com/catvod.json",
+            "name": "Catvod"
+        },
+        {
+            "url": "http://wwwbaiducom.kevip.icu/KjDIQdNFHwbATQe/qyys.json",
+            "name": "家庭影院"
+        },
+        {
+            "url": "https://16151.kstore.space",
+            "name": "东篱在线"
+        },
+        {
+            "url": "http://rihou.cc:88/demo.php",
+            "name": "集多在线"
+        },
+        {
+            "url": "https://bitbucket.org/xduo/libs/raw/master/index.json",
+            "name": "道长在线"
+        },
+//{"url": "http://cdn.qiaoji8.com/tvbox.json","name": "巧技线路"},
+        {
+            "url": "http://home.jundie.top:81/top98.json",
+            "name": "俊佬线路"
+        },
+        {
+            "url": "https://tvbox.catvod.com/jsm.json",
+            "name": "PiG·线路"
+        },
+        {
+            "url": "file://TVBoxOSC/tvbox/api.json",
+            "name": "影视本地"
+        },
+        {
+            "url": "clan://localhost/TVBoxOSC/tvbox/api.json",
+            "name": "通用本地"
+        }
+
+    ],
+    "vip": [
+        {
+            "url": "",
+            "name": "默认"
+        }
+    ]
+}
