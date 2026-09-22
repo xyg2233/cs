@@ -344,6 +344,7 @@ async function detail(id) {
 
         // 1. 基础信息解析
         const vod_name = $('.slide-info-title').text().trim();
+
         const vod_pic = $('.detail-pic img').attr("data-src") || '';
         const vod_actor = $('.detail-info .slide-info').eq(2).text().replace(/演员：\s*/, '').trim();
         const vod_remarks = $('.detail-info .slide-info').eq(4).text().replace(/连载\s*:\s*/, '').trim();
@@ -425,12 +426,15 @@ async function parsePLayUrl(is2kLine, url) {
         // 2. 核心调整：严格按照 Req.java 的字段定义去传参
         let playDataRes = await req(`${parseApiUrl}/player/mplayer.php`, {
             method: 'POST',
-            // postType: 'form', // 👈 源码确认支持，必须写
+            postType: 'form', // 👈 源码确认支持，必须写
             headers: {
                 'User-Agent': UA,
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
             },
-             body: `url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}` // 手动拼接字符串
+            data: { // 👈 传 Object，不要传字符串
+                url: url,
+                token: token
+            }
         });
         
         return JSON.parse(playDataRes.content).url;
@@ -457,10 +461,6 @@ async function play(flag, id, flags) {
         }
         const is2kLine = flag.includes('2k')
         const playUrl = await parsePLayUrl(is2kLine, url)
-
-        if (!playUrl) {
-            return JSON.stringify({ parse: 0, url: "" ,msg: "解析失败,请更换线路" });
-        }
         return JSON.stringify({
             parse: 0,
             header: {
